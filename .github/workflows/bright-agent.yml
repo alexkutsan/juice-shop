@@ -153,9 +153,10 @@ jobs:
           REPO_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRIGHT_TOKEN: ${{ secrets.BRIGHT_TOKEN }}
           BRIGHT_HOSTNAME: ${{ vars.BRIGHT_HOSTNAME }}
-          # Bright project ID the scan runs under. Required here because the
-          # token can see many projects, and the agent never picks one itself.
-          BRIGHT_PROJECT: ${{ vars.BRIGHT_PROJECT }}
+          # Bright project ID the scan runs under. The agent reads BRIGHT_PROJECT_ID
+          # (see config.ts); required because the token can see many projects and
+          # the agent never picks one itself. Sourced from the BRIGHT_PROJECT repo var.
+          BRIGHT_PROJECT_ID: ${{ vars.BRIGHT_PROJECT }}
           INFERENCE_URL: ${{ vars.INFERENCE_URL }}
           INFERENCE_TOKEN: ${{ secrets.INFERENCE_TOKEN }}
           # Steering inputs — populated only for a `/bright-agent` comment; empty
@@ -200,8 +201,8 @@ jobs:
           BRIGHT_DEBUG: "1"
           BRIGHT_DUMP_TURNS: "1"
           BRIGHT_DUMP_DIR: ${{ runner.temp }}/bright-dumps
-          # Optional:
-          AI_MODEL: "gpt-6-luna,gpt-6.1-sol"
+          # Model(s) for the inference endpoint, from the AI_MODEL repo var.
+          AI_MODEL: ${{ vars.AI_MODEL }}
         run: "${{ runner.temp }}/${{ env.ASSET }}"
 
       # --- Artifact uploads (always run, even on failure) ---

@@ -170,6 +170,29 @@ jobs:
             -H "Authorization: Api-Key ${BRIGHT_TOKEN}" -H "Accept: application/json" \
             "https://${BRIGHT_HOSTNAME}/api/v2/projects?id%5B%5D=${BRIGHT_PROJECT}&limit=2"
 
+      # TEMP diagnostic: run the SAME binary in preflight-only mode so we see the
+      # agent's own fetch result (step-by-step) from inside the runner — this is
+      # what distinguishes "curl works but the binary's fetch gets 401" from a
+      # plain token problem. Remove once green.
+      - name: Preflight-only via the binary
+        working-directory: ${{ runner.temp }}
+        continue-on-error: true
+        env:
+          BRIGHT_TOKEN: ${{ secrets.BRIGHT_TOKEN }}
+          BRIGHT_HOSTNAME: ${{ vars.BRIGHT_HOSTNAME }}
+          BRIGHT_PROJECT_ID: ${{ vars.BRIGHT_PROJECT }}
+          INFERENCE_URL: ${{ vars.INFERENCE_URL }}
+          INFERENCE_TOKEN: ${{ secrets.INFERENCE_TOKEN }}
+          AI_MODEL: "gpt-6-luna,gpt-6.1-sol"
+          BRIGHT_PREFLIGHT_ONLY: "1"
+          BRIGHT_DEBUG: "1"
+          REPO_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LOCAL_REPO_PATH: ${{ github.workspace }}
+        run: |
+          "${{ runner.temp }}/${{ env.ASSET }}" --version 2>/dev/null || echo "(no --version flag)"
+          echo "=== preflight-only run ==="
+          "${{ runner.temp }}/${{ env.ASSET }}" 2>&1 | head -40 || true
+
       - name: Run Bright Agent
         env:
           # Run against the checked-out tree. REPOSITORY_URL is derived from the
@@ -178,9 +201,10 @@ jobs:
           REPO_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRIGHT_TOKEN: ${{ secrets.BRIGHT_TOKEN }}
           BRIGHT_HOSTNAME: ${{ vars.BRIGHT_HOSTNAME }}
-          # Bright project ID the scan runs under. Required here because the
-          # token can see many projects, and the agent never picks one itself.
-          BRIGHT_PROJECT: ${{ vars.BRIGHT_PROJECT }}
+          # Bright project ID the scan runs under. The agent reads BRIGHT_PROJECT_ID
+          # (see config.ts); required because the token can see many projects and
+          # the agent never picks one itself. Sourced from the BRIGHT_PROJECT repo var.
+          BRIGHT_PROJECT_ID: ${{ vars.BRIGHT_PROJECT }}
           INFERENCE_URL: ${{ vars.INFERENCE_URL }}
           INFERENCE_TOKEN: ${{ secrets.INFERENCE_TOKEN }}
           # Steering inputs — populated only for a `/bright-agent` comment; empty

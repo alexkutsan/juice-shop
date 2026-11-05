@@ -183,7 +183,7 @@ jobs:
           BRIGHT_PROJECT_ID: ${{ vars.BRIGHT_PROJECT }}
           INFERENCE_URL: ${{ vars.INFERENCE_URL }}
           INFERENCE_TOKEN: ${{ secrets.INFERENCE_TOKEN }}
-          AI_MODEL: "gpt-6-luna,gpt-6.1-sol"
+          AI_MODEL: ${{ vars.AI_MODEL }}
           BRIGHT_PREFLIGHT_ONLY: "1"
           BRIGHT_DEBUG: "1"
           REPO_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -249,8 +249,8 @@ jobs:
           BRIGHT_DEBUG: "1"
           BRIGHT_DUMP_TURNS: "1"
           BRIGHT_DUMP_DIR: ${{ runner.temp }}/bright-dumps
-          # Optional:
-          AI_MODEL: "gpt-6-luna,gpt-6.1-sol"
+          # Model(s) for the inference endpoint, from the AI_MODEL repo var.
+          AI_MODEL: ${{ vars.AI_MODEL }}
         run: "${{ runner.temp }}/${{ env.ASSET }}"
 
       # --- Artifact uploads (always run, even on failure) ---

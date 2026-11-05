@@ -44,7 +44,7 @@ on:
       scan_mode:
         description: "Scan mode for this manual run"
         required: true
-        default: "full-auth"
+        default: "full-auth-stub"
         type: choice
         options:
           # functional       → RUN_MODE=function: skip full app startup, wrap
@@ -187,21 +187,23 @@ jobs:
           # the scan to the diff. Set SCAN_SCOPE=changed to force diff-only
           # (bails on docs-only PRs) or SCAN_SCOPE=full to force a full scan.
           # SCAN_SCOPE: changed
-          # --- Scan mode (workflow_dispatch only) ---
-          # The `scan_mode` input selects RUN_MODE + BRIGHT_AUTH_STUB:
+          # --- Scan mode ---
+          # Default across ALL triggers: full-auth-stub (RUN_MODE=full,
+          # BRIGHT_AUTH_STUB=on). A manual workflow_dispatch can still override
+          # via the `scan_mode` input:
           #   functional     → RUN_MODE=function
           #   full-auth      → RUN_MODE=full,     BRIGHT_AUTH_STUB=off
           #   full-auth-stub → RUN_MODE=full,     BRIGHT_AUTH_STUB=on
-          # On pull_request / issue_comment the input is empty, so both stay unset
-          # and the agent uses its own defaults (RUN_MODE=full, auth stub=auto).
+          # On pull_request / issue_comment the input is empty, so the defaults
+          # below apply → the agent boots the real app and forces the auth stub.
           RUN_MODE: >-
             ${{ (inputs.scan_mode == 'functional' && 'function')
               || ((inputs.scan_mode == 'full-auth' || inputs.scan_mode == 'full-auth-stub') && 'full')
-              || '' }}
+              || 'full' }}
           BRIGHT_AUTH_STUB: >-
             ${{ (inputs.scan_mode == 'full-auth-stub' && 'on')
               || (inputs.scan_mode == 'full-auth' && 'off')
-              || '' }}
+              || 'on' }}
           # --- Detailed stats & diagnostics ---
           BRIGHT_DEBUG: "1"
           BRIGHT_DUMP_TURNS: "1"

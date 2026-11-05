@@ -145,6 +145,31 @@ jobs:
       - name: Show all available env variables
         run: env | sort
 
+      # TEMP diagnostic: reproduce the agent's exact preflight request
+      # (GET /api/v2/projects?limit=1, Authorization: Api-Key <token>) from the
+      # runner and print only the HTTP status + token length/sha (never the
+      # token value), to tell a bad secret from a bad request. Remove once green.
+      - name: Preflight diagnostic (no secrets printed)
+        env:
+          BRIGHT_TOKEN: ${{ secrets.BRIGHT_TOKEN }}
+          BRIGHT_HOSTNAME: ${{ vars.BRIGHT_HOSTNAME }}
+          BRIGHT_PROJECT: ${{ vars.BRIGHT_PROJECT }}
+        run: |
+          echo "hostname raw: [${BRIGHT_HOSTNAME}]"
+          echo "token length: ${#BRIGHT_TOKEN}"
+          echo "token sha256 (first 12): $(printf '%s' "$BRIGHT_TOKEN" | sha256sum | cut -c1-12)"
+          echo "token has trailing whitespace/CR: $(printf '%s' "$BRIGHT_TOKEN" | tail -c1 | od -An -tx1)"
+          code=$(curl -s -o /tmp/pf.json -w '%{http_code}' \
+            -H "Authorization: Api-Key ${BRIGHT_TOKEN}" \
+            -H "Accept: application/json" \
+            "https://${BRIGHT_HOSTNAME}/api/v2/projects?limit=1")
+          echo "preflight HTTP: ${code}"
+          echo "body (first 300):"; head -c 300 /tmp/pf.json; echo
+          echo "project lookup (id=${BRIGHT_PROJECT}):"
+          curl -s -o /dev/null -w '  HTTP %{http_code}\n' \
+            -H "Authorization: Api-Key ${BRIGHT_TOKEN}" -H "Accept: application/json" \
+            "https://${BRIGHT_HOSTNAME}/api/v2/projects?id%5B%5D=${BRIGHT_PROJECT}&limit=2"
+
       - name: Run Bright Agent
         env:
           # Run against the checked-out tree. REPOSITORY_URL is derived from the

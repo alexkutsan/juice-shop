@@ -24,6 +24,24 @@ export function getAddressById () {
   }
 }
 
+export function putAddressById () {
+  return async (req: Request, res: Response) => {
+    const address = await AddressModel.findOne({ where: { id: req.params.id, UserId: req.body.UserId } })
+    if (address != null) {
+      const updateData: Record<string, unknown> = {}
+      for (const field of ['fullName', 'mobileNum', 'zipCode', 'streetAddress', 'city', 'state', 'country']) {
+        if (req.body[field] !== undefined) {
+          updateData[field] = req.body[field]
+        }
+      }
+      await address.update(updateData)
+      res.status(200).json({ status: 'success', data: address })
+    } else {
+      res.status(400).json({ status: 'error', data: 'Malicious activity detected.' })
+    }
+  }
+}
+
 export function delAddressById () {
   return async (req: Request, res: Response) => {
     const address = await AddressModel.destroy({ where: { id: req.params.id, UserId: req.body.UserId } })

@@ -23,6 +23,8 @@
 #   and repository variables:
 #     INFERENCE_URL     that endpoint's base URL (OpenAI, GitHub Models, Ollama, …)
 #     BRIGHT_HOSTNAME   Bright instance hostname (optional, e.g. app.brightsec.com)
+#     BRIGHT_PROJECT    Bright project ID the scan runs under (required when the
+#                       token can see more than one project)
 #
 # Repo access uses the built-in GITHUB_TOKEN (see `permissions:`).
 
@@ -151,6 +153,9 @@ jobs:
           REPO_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRIGHT_TOKEN: ${{ secrets.BRIGHT_TOKEN }}
           BRIGHT_HOSTNAME: ${{ vars.BRIGHT_HOSTNAME }}
+          # Bright project ID the scan runs under. Required here because the
+          # token can see many projects, and the agent never picks one itself.
+          BRIGHT_PROJECT: ${{ vars.BRIGHT_PROJECT }}
           INFERENCE_URL: ${{ vars.INFERENCE_URL }}
           INFERENCE_TOKEN: ${{ secrets.INFERENCE_TOKEN }}
           # Steering inputs — populated only for a `/bright-agent` comment; empty

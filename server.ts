@@ -44,6 +44,7 @@ import { QuantityModel } from './models/quantity'
 import { FeedbackModel } from './models/feedback'
 import { ComplaintModel } from './models/complaint'
 import { ChallengeModel } from './models/challenge'
+import { BasketModel } from './models/basket'
 import { BasketItemModel } from './models/basketitem'
 import { SecurityAnswerModel } from './models/securityAnswer'
 import { PrivacyRequestModel } from './models/privacyRequests'
@@ -370,6 +371,33 @@ restoreOverwrittenFilesWithOriginals().then(() => {
   /* BasketItems: API only accessible for authenticated users */
   app.use('/api/BasketItems', security.isAuthorized())
   app.use('/api/BasketItems/:id', security.isAuthorized())
+  app.get('/api/BasketItems/:id', async (req: Request, res: Response, next: NextFunction) => {
+    const authenticatedUserId = (req as any).auth?.data?.id
+    const id = req.params.id
+
+    if (!/^\d+$/.test(id)) {
+      res.status(404).json({ status: 'error', message: 'Not found' })
+      return
+    }
+
+    try {
+      const basketItem = await BasketItemModel.findByPk(id, { attributes: ['BasketId'] })
+      const ownedBasket = basketItem === null
+        ? null
+        : await BasketModel.findOne({
+          where: { id: basketItem.BasketId, UserId: authenticatedUserId },
+          attributes: ['id']
+        })
+
+      if (ownedBasket === null) {
+        res.status(404).json({ status: 'error', message: 'Not found' })
+        return
+      }
+      next()
+    } catch (error) {
+      next(error)
+    }
+  })
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
   app.get('/api/Feedbacks/:id', async (req: Request, res: Response, next: NextFunction) => {

@@ -34,6 +34,18 @@ export const forgedFeedbackChallenge = () => (req: Request, res: Response, next:
   next()
 }
 
+// Feedback can be submitted anonymously, but the submitter must not be able
+// to choose which user is associated with it. A client-supplied UserId must
+// never reach the database, since a foreign-key error would disclose whether
+// that user exists.
+export const setFeedbackUserId = () => (req: Request, res: Response, next: NextFunction) => {
+  const user = security.authenticatedUsers.from(req)
+  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
+    req.body.UserId = user?.data ? user.data.id : null
+  }
+  next()
+}
+
 export const captchaBypassChallenge = () => (req: Request, res: Response, next: NextFunction) => {
   if (challengeUtils.notSolved(challenges.captchaBypassChallenge)) {
     if (req.app.locals.captchaReqId >= 10) {

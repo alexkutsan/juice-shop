@@ -458,6 +458,7 @@ restoreOverwrittenFilesWithOriginals().then(() => {
   app.put('/api/Addresss/:id', security.appendUserId())
   app.delete('/api/Addresss/:id', security.appendUserId(), address.delAddressById())
   app.get('/api/Addresss/:id', security.appendUserId(), address.getAddressById())
+  app.use('/api/Deliverys', security.isAuthorized())
   app.get('/api/Deliverys', delivery.getDeliveryMethods())
   app.get('/api/Deliverys/:id', delivery.getDeliveryMethod())
   // vuln-code-snippet end changeProductChallenge

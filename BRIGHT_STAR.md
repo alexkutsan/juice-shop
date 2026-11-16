@@ -73,23 +73,19 @@ resulting health endpoint were verified with v6.0.1.
 
 ## Auth
 
-- Run with `BRIGHT_AUTH_STUB=off`. Use the real JSON login.
-- Login: `POST /rest/user/login` with body
-  `{"email":"admin@juice-sh.op","password":"admin123"}`.
-- Success returns HTTP 200 with `authentication.token`.
-- Inject that JWT into both `Authorization: Bearer <token>` and
-  `Cookie: token=<token>`. Several valid routes use one form only.
-- Session check: `GET /rest/basket/1` returns 401 anonymously and 200 with the
-  seeded admin session.
-- Refresh the login after each application restart.
+- Run with `RUN_MODE=full` and `BRIGHT_AUTH_STUB=on`.
+- Require the transient auth stub for the live application scan.
+- Use the agent-managed `X-Bright-Principal` secret as the scan identity.
+- If app startup or stub setup fails, stop the run with an error.
+- Never start, switch to, or continue in function harness mode.
+- Session check: `GET /rest/basket/1` returns 401 anonymously and 200 with
+  the privileged stub session.
+- Never print or persist the stub secret.
 
 ## Credentials
 
-All needed accounts are public fixtures in `data/static/users.yml`. No external
-credentials are needed. Prefer the seeded admin above; it owns BasketId 1, a wallet,
-cards, and a security answer. For the accounting-only delivery-status route, use
-`accountant@juice-sh.op` / `i am an awesome accountant` as a separate role-specific
-probe. Never print or persist a returned JWT.
+Accounts in `data/static/users.yml` are public fixtures for setup checks and role
+context only. Do not replace the required auth stub with a real login session.
 
 ## Route inventory and baseline examples
 

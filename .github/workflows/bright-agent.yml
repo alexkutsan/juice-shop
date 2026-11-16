@@ -36,24 +36,13 @@ on:
   workflow_dispatch:
     inputs:
       scan_mode:
-        description: "Scan mode for this manual run"
+        description: "Required mode for this manual run"
         required: true
-        default: "full-auth"
+        default: "full-auth-stub"
         type: choice
         options:
-          # functional       → RUN_MODE=function: skip full app startup, wrap
-          #                     security-critical functions in an HTTP harness and
-          #                     scan those. No live app, no auth needed.
-          - functional
-          # full-auth         → RUN_MODE=full with BRIGHT_AUTH_STUB=off: boot the
-          #                     real app and scan live routes using ONLY a real
-          #                     login (no auth-stub fallback).
-          - full-auth
-          # full-auth-stub    → RUN_MODE=full with BRIGHT_AUTH_STUB=on: boot the
-          #                     real app and force the auth-stub (transiently patch
-          #                     the credential check so a secret X-Bright-Principal
-          #                     header authenticates as a real privileged user —
-          #                     authentication only, reverted and never committed).
+          # RUN_MODE=full with BRIGHT_AUTH_STUB=on: boot the real app and force
+          # the transient authentication stub. Function mode is never allowed.
           - full-auth-stub
 
 # contents: write     → commit fixes onto the (PR head or scan) branch
@@ -136,12 +125,12 @@ jobs:
         run: |
           set -euo pipefail
           test "${{ github.event_name }}" = "workflow_dispatch"
-          test "${{ inputs.scan_mode }}" = "full-auth"
+          test "${{ inputs.scan_mode }}" = "full-auth-stub"
 
           base_sha="$(git rev-parse origin/master)"
           test "$(git merge-base origin/master HEAD)" = "${base_sha}"
 
-          unexpected="$(git diff --name-only origin/master...HEAD | grep -Ev '^(\.github/workflows/bright-agent\.yml|BRIGHT_STAR\.md|bright-star-route-hints\.openapi\.yml)$' || true)"
+          unexpected="$(git diff --name-only origin/master...HEAD | grep -Ev '^(\.github/workflows/bright-agent\.yml|\.github/scripts/(strict-bright-agent-supervisor|test-strict-bright-agent-supervisor)\.py|BRIGHT_STAR\.md|bright-star-route-hints\.openapi\.yml)$' || true)"
           if [[ -n "${unexpected}" ]]; then
             echo "::error::Application files differ from origin/master: ${unexpected}"
             exit 1
@@ -170,6 +159,9 @@ jobs:
           print(f"Validated {len(models)} Finale resources, {len(operations)} CRUD routes, and {len(cases)} baseline cases")
           PY
 
+      - name: Test strict no-harness supervisor
+        run: python3 .github/scripts/test-strict-bright-agent-supervisor.py
+
       - name: Download & verify Bright Agent
         working-directory: ${{ runner.temp }}
         run: |
@@ -191,9 +183,11 @@ jobs:
           INFERENCE_TOKEN: ${{ secrets.INFERENCE_TOKEN }}
           AI_MODEL: ${{ vars.AI_MODEL }}
           RUN_MODE: full
-          BRIGHT_AUTH_STUB: "off"
+          BRIGHT_AUTH_STUB: "on"
           BRIGHT_PREFLIGHT_ONLY: "1"
-        run: "${{ runner.temp }}/${{ env.ASSET }}"
+        run: >-
+          python3 .github/scripts/strict-bright-agent-supervisor.py
+          "${{ runner.temp }}/${{ env.ASSET }}"
 
       - name: Run Bright Agent
         env:
@@ -231,26 +225,19 @@ jobs:
           # This config branch is only for the manual full baseline.
           SCAN_SCOPE: full
           # --- Scan mode ---
-          # Manual baseline default: full app with real authentication.
-          # A workflow_dispatch can still choose the functional or stub modes,
-          # but this branch's validation gate permits only full-auth.
-          # This branch is not merged into master, so issue-comment steering
-          # continues to use the workflow already present on master.
-          RUN_MODE: >-
-            ${{ (inputs.scan_mode == 'functional' && 'function')
-              || ((inputs.scan_mode == 'full-auth' || inputs.scan_mode == 'full-auth-stub') && 'full')
-              || 'full' }}
-          BRIGHT_AUTH_STUB: >-
-            ${{ (inputs.scan_mode == 'full-auth-stub' && 'on')
-              || (inputs.scan_mode == 'full-auth' && 'off')
-              || 'off' }}
+          # This branch permits only a real-app run with the auth stub forced on.
+          # The supervisor fails the job before any function harness can continue.
+          RUN_MODE: full
+          BRIGHT_AUTH_STUB: "on"
           # --- Detailed stats & diagnostics ---
           BRIGHT_DEBUG: "1"
           BRIGHT_DUMP_TURNS: "1"
           BRIGHT_DUMP_DIR: ${{ runner.temp }}/bright-dumps
           # Model(s) for the inference endpoint, from the AI_MODEL repo var.
           AI_MODEL: ${{ vars.AI_MODEL }}
-        run: "${{ runner.temp }}/${{ env.ASSET }}"
+        run: >-
+          python3 .github/scripts/strict-bright-agent-supervisor.py
+          "${{ runner.temp }}/${{ env.ASSET }}"
 
       # --- Artifact uploads (always run, even on failure) ---
 

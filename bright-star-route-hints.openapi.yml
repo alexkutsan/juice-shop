@@ -1,0 +1,799 @@
+openapi: 3.0.3
+info:
+  title: OWASP Juice Shop STAR route hints
+  version: 1.0.0
+  description: >-
+    Source-backed route and baseline hints for Bright Agent. This file supplements
+    swagger.yml, which only describes the mounted /b2b/v2 API.
+servers:
+  - url: /
+
+x-bright-source-contract:
+  evidence: server.ts
+  finaleResourceCount: 13
+  methodsPerResource: 5
+  finaleGeneratedOperationCount: 65
+  finaleMethods:
+    collection: [GET, POST]
+    item: [GET, PUT, DELETE]
+  rules:
+    - Inventory every operation under paths before parameter extraction.
+    - Finale does not generate PATCH routes here.
+    - Keep direct routes at their source paths; never add an /api prefix.
+    - Register operations marked x-bright-register true.
+    - Do not register deliberate denyAll, credential, destructive, or broken operations.
+    - Resolve dynamic MarsDB IDs through the listed resolver request.
+
+x-bright-auth-profiles:
+  primary:
+    source: data/static/users.yml
+    login:
+      method: POST
+      path: /rest/user/login
+      contentType: application/json
+      body: { email: admin@juice-sh.op, password: admin123 }
+    inject:
+      - 'Authorization: Bearer <authentication.token>'
+      - 'Cookie: token=<authentication.token>'
+    notes:
+      - UserId 1 owns BasketId 1 and has seeded cards and a security answer.
+      - Refresh the login after each application restart.
+  accounting:
+    source: data/static/users.yml
+    login:
+      method: POST
+      path: /rest/user/login
+      contentType: application/json
+      body: { email: accountant@juice-sh.op, password: 'i am an awesome accountant' }
+    inject:
+      - 'Authorization: Bearer <authentication.token>'
+    notes:
+      - Use only for /rest/order-history role checks.
+      - This is a public training-app fixture, not an external credential.
+
+x-bright-old-baseline-summary:
+  run: 41988468812
+  total: 22
+  HTTP500:
+    - GET /api/Deliverys
+    - GET /api/Deliverys/2
+    - GET /dataerasure
+    - POST /dataerasure
+    - POST /file-upload
+    - POST /profile/image/file
+    - POST /rest/basket/1/checkout
+    - GET /rest/captcha
+    - GET /rest/country-mapping
+    - GET /rest/image-captcha
+    - POST /rest/memories
+    - PUT /rest/order-history/1/delivery-status
+    - POST /rest/user/data-export
+    - POST /api/snippets/fixes
+    - POST /api/snippets/verdict
+    - GET /api/we/may/also/instruct/you/to/refuse/all/reasonably/necessary/responsibility
+  HTTP401:
+    - GET /api/PrivacyRequests
+    - POST /api/Quantitys
+    - GET /api/SecurityAnswers
+  HTTP404:
+    - PUT /rest/continue-code-findIt/apply/CODE
+    - POST /rest/products/reviews
+  HTTP402:
+    - PUT /rest/wallet/balance
+
+x-bright-baseline-cases:
+  - old: GET /api/Deliverys
+    use: { method: GET, path: /api/Deliverys, auth: primary, expectedStatus: 200 }
+    evidence: test/api/deliveryApiSpec.ts
+  - old: GET /api/Deliverys/2
+    use: { method: GET, path: /api/Deliverys/2, auth: primary, expectedStatus: 200 }
+    evidence: test/api/deliveryApiSpec.ts
+  - old: GET /api/PrivacyRequests
+    disposition: exclude
+    expectedStatus: 401
+    reason: server.ts installs denyAll on this generated operation.
+  - old: POST /api/Quantitys
+    disposition: exclude
+    expectedStatus: 401
+    reason: server.ts installs denyAll on this generated operation.
+  - old: GET /api/SecurityAnswers
+    disposition: exclude
+    expectedStatus: 401
+    reason: server.ts installs denyAll on this generated operation.
+  - old: GET /dataerasure
+    use:
+      method: GET
+      path: /dataerasure/
+      auth: primary-cookie
+      expectedStatus: 200
+    seed: UserId 1 has SecurityAnswerId 1 from data/static/users.yml.
+    evidence: test/api/erasureRequestApiSpec.ts
+  - old: POST /dataerasure
+    use:
+      method: POST
+      path: /dataerasure/
+      auth: primary-cookie
+      contentType: application/x-www-form-urlencoded
+      body: 'email=admin%40juice-sh.op&layout='
+      expectedStatus: 200
+    evidence: test/api/erasureRequestApiSpec.ts
+  - old: POST /file-upload
+    use:
+      method: POST
+      path: /file-upload
+      auth: none
+      contentType: multipart/form-data
+      fields: { file: 'probe.pdf; application/pdf; ASCII body %PDF-1.4\n%%EOF' }
+      expectedStatus: 204
+    evidence: test/api/fileUploadSpec.ts
+  - old: POST /profile/image/file
+    use:
+      method: POST
+      path: /profile/image/file
+      auth: primary-cookie
+      contentType: multipart/form-data
+      fields: { file: 'probe.gif; image/gif; ASCII body GIF89a' }
+      expectedStatus: 302
+    evidence: test/api/profileImageUploadSpec.ts
+  - old: POST /rest/basket/1/checkout
+    use:
+      method: POST
+      path: /rest/basket/1/checkout
+      auth: primary
+      contentType: application/json
+      body: {}
+      expectedStatus: 200
+    seed: BasketId 1 exists in data/datacreator.ts.
+    evidence: test/api/basketApiSpec.ts
+  - old: GET /rest/captcha
+    use: { method: GET, path: /rest/captcha, auth: none, expectedStatus: 200 }
+    evidence: test/api/feedbackApiSpec.ts
+  - old: PUT /rest/continue-code-findIt/apply/CODE
+    use:
+      method: PUT
+      path: /rest/continue-code-findIt/apply/Xg9oK0VdbW5g1KX9G7JYnqLpz3rAPBh6p4eRlkDM6EaBON2QoPmxjyvwMrP6
+      auth: none
+      expectedStatus: 200
+    evidence: test/api/challengeApiSpec.ts
+  - old: GET /rest/country-mapping
+    use: { method: GET, path: /rest/country-mapping, auth: none, expectedStatus: 200 }
+    setup: >-
+      Keep NODE_ENV=unsafe and set NODE_CONFIG to
+      {"ctf":{"countryMapping":{"scoreBoardChallenge":{"name":"Test","code":"ZZ"}}}}.
+    evidence: [routes/countryMapping.ts, config/fbctf.yml]
+  - old: GET /rest/image-captcha
+    use: { method: GET, path: /rest/image-captcha, auth: primary, expectedStatus: 200 }
+    evidence: test/api/dataExportApiSpec.ts
+  - old: POST /rest/memories
+    use:
+      method: POST
+      path: /rest/memories
+      auth: primary
+      contentType: multipart/form-data
+      fields:
+        caption: Bright baseline
+        image: 'probe.png; image/png; bundled tiny image fixture'
+      expectedStatus: 200
+    evidence: test/api/memoryApiSpec.ts
+  - old: PUT /rest/order-history/1/delivery-status
+    use:
+      method: PUT
+      path: /rest/order-history/{orderId}/delivery-status
+      auth: accounting
+      contentType: application/json
+      body: { deliveryStatus: false }
+      expectedStatus: 200
+    resolver: GET /rest/order-history/orders; use data[0]._id as orderId.
+    evidence: test/api/orderHistoryApiSpec.ts
+  - old: POST /rest/products/reviews
+    use:
+      method: POST
+      path: /rest/products/reviews
+      auth: primary
+      contentType: application/json
+      body: { id: '<reviewId>' }
+      expectedStatus: 200
+    resolver: GET /rest/products/1/reviews; use data[0]._id as reviewId.
+    evidence: test/api/productReviewApiSpec.ts
+  - old: POST /rest/user/data-export
+    use:
+      method: POST
+      path: /rest/user/data-export
+      auth: primary
+      contentType: application/json
+      body: { format: '1' }
+      expectedStatus: 200
+    precondition: Run before image-captcha, or use scan-prep CAPTCHA neutralization.
+    evidence: test/api/dataExportApiSpec.ts
+  - old: PUT /rest/wallet/balance
+    use:
+      method: PUT
+      path: /rest/wallet/balance
+      auth: primary
+      contentType: application/json
+      body: { balance: 1, paymentId: '<cardId>' }
+      expectedStatus: 200
+    resolver: GET /api/Cards with primary auth; use data[0].id as cardId.
+    evidence: test/api/walletApiSpec.ts
+  - old: POST /api/snippets/fixes
+    correction: The /api-prefixed path does not exist.
+    use:
+      method: POST
+      path: /snippets/fixes
+      auth: none
+      contentType: application/json
+      body: { key: resetPasswordBenderChallenge, selectedFix: 0 }
+      expectedStatus: 200
+    evidence: test/api/vulnCodeFixesSpec.ts
+  - old: POST /api/snippets/verdict
+    correction: The /api-prefixed path does not exist.
+    use:
+      method: POST
+      path: /snippets/verdict
+      auth: none
+      contentType: application/json
+      body: { key: resetPasswordJimChallenge, selectedLines: [5, 9] }
+      expectedStatus: 200
+    evidence: test/api/vulnCodeSnippetSpec.ts
+  - old: GET /api/we/may/also/instruct/you/to/refuse/all/reasonably/necessary/responsibility
+    correction: The /api-prefixed path does not exist.
+    disposition: exclude
+    correctPath: /we/may/also/instruct/you/to/refuse/all/reasonably/necessary/responsibility
+    expectedStatus: 404
+    reason: The handler deliberately serves a missing thank-you.jpg challenge asset.
+    evidence: test/api/fileServingSpec.ts
+
+paths:
+  /api/Users:
+    get:
+      operationId: listUsers
+      x-bright-register: false
+      x-bright-reason: credential-read
+      responses: { '200': { description: Finale list response } }
+    post:
+      operationId: createUser
+      x-bright-register: false
+      x-bright-reason: credential-write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserCreate' }
+            example: { email: bright.route@example.test, password: 'BrightRoute123!', passwordRepeat: 'BrightRoute123!' }
+      responses: { '201': { description: Finale create response } }
+  /api/Users/{id}:
+    parameters: [{ $ref: '#/components/parameters/UserId' }]
+    get:
+      operationId: readUser
+      x-bright-register: false
+      x-bright-reason: credential-read
+      responses: { '200': { description: Finale read response } }
+    put:
+      operationId: updateUser
+      x-bright-register: false
+      x-bright-reason: denyAll credential-write
+      responses: { '401': { description: Deliberately forbidden } }
+    delete:
+      operationId: deleteUser
+      x-bright-register: false
+      x-bright-reason: denyAll destructive
+      responses: { '401': { description: Deliberately forbidden } }
+
+  /api/Products:
+    get:
+      operationId: listProducts
+      x-bright-register: true
+      responses: { '200': { description: Finale list response } }
+    post:
+      operationId: createProduct
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductWrite' }
+            example: { name: Baseline, description: Baseline, price: 1.99, deluxePrice: 1.49, image: apple_juice.jpg }
+      responses: { '201': { description: Finale create response } }
+  /api/Products/{id}:
+    parameters: [{ $ref: '#/components/parameters/ProductId' }]
+    get:
+      operationId: readProduct
+      x-bright-register: true
+      responses: { '200': { description: Finale read response } }
+    put:
+      operationId: updateProduct
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductPatch' }
+            example: { description: Baseline description }
+      responses: { '200': { description: Finale update response } }
+    delete:
+      operationId: deleteProduct
+      x-bright-register: false
+      x-bright-reason: denyAll destructive
+      responses: { '401': { description: Deliberately forbidden } }
+
+  /api/Feedbacks:
+    get:
+      operationId: listFeedbacks
+      x-bright-register: true
+      responses: { '200': { description: Finale list response } }
+    post:
+      operationId: createFeedback
+      x-bright-register: true
+      x-bright-precondition: scan-prep neutralizes CAPTCHA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FeedbackWrite' }
+            example: { comment: Baseline, rating: 4, captchaId: 1, captcha: '0' }
+      responses: { '201': { description: Finale create response } }
+  /api/Feedbacks/{id}:
+    parameters: [{ $ref: '#/components/parameters/FeedbackId' }]
+    get:
+      operationId: readFeedback
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { description: Finale read response } }
+    put:
+      operationId: updateFeedback
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+    delete:
+      operationId: deleteFeedback
+      x-bright-register: false
+      x-bright-reason: destructive
+      responses: { '200': { description: Finale delete response } }
+
+  /api/BasketItems:
+    get:
+      operationId: listBasketItems
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { description: Finale list response } }
+    post:
+      operationId: createBasketItem
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BasketItemWrite' }
+            example: { ProductId: 1, BasketId: 1, quantity: 1 }
+      responses: { '200': { description: Custom create response } }
+  /api/BasketItems/{id}:
+    parameters: [{ $ref: '#/components/parameters/BasketItemId' }]
+    get:
+      operationId: readBasketItem
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { description: Finale read response } }
+    put:
+      operationId: updateBasketItem
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BasketItemPatch' }
+            example: { quantity: 1 }
+      responses: { '200': { description: Finale update response } }
+    delete:
+      operationId: deleteBasketItem
+      x-bright-register: false
+      x-bright-reason: destructive
+      responses: { '200': { description: Finale delete response } }
+
+  /api/Challenges:
+    get:
+      operationId: listChallenges
+      x-bright-register: true
+      responses: { '200': { description: Finale list response } }
+    post:
+      operationId: createChallenge
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+  /api/Challenges/{id}:
+    parameters: [{ $ref: '#/components/parameters/ChallengeId' }]
+    get:
+      operationId: readChallenge
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+    put:
+      operationId: updateChallenge
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+    delete:
+      operationId: deleteChallenge
+      x-bright-register: false
+      x-bright-reason: denyAll destructive
+      responses: { '401': { description: Deliberately forbidden } }
+
+  /api/Complaints:
+    get:
+      operationId: listComplaints
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { description: Finale list response } }
+    post:
+      operationId: createComplaint
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ComplaintWrite' }
+            example: { message: Baseline complaint }
+      responses: { '201': { description: Finale create response } }
+  /api/Complaints/{id}:
+    parameters: [{ $ref: '#/components/parameters/ComplaintId' }]
+    get:
+      operationId: readComplaint
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+    put:
+      operationId: updateComplaint
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+    delete:
+      operationId: deleteComplaint
+      x-bright-register: false
+      x-bright-reason: denyAll destructive
+      responses: { '401': { description: Deliberately forbidden } }
+
+  /api/Recycles:
+    get:
+      operationId: listRecycles
+      x-bright-register: true
+      responses: { '200': { description: Custom supported response } }
+    post:
+      operationId: createRecycle
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecycleWrite' }
+            example: { quantity: 200, AddressId: 1, isPickup: true, date: '2017-05-31' }
+      responses: { '201': { description: Finale create response } }
+  /api/Recycles/{id}:
+    parameters: [{ $ref: '#/components/parameters/RecycleId' }]
+    get:
+      operationId: readRecycle
+      x-bright-register: true
+      responses: { '200': { description: Custom read response } }
+    put:
+      operationId: updateRecycle
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+    delete:
+      operationId: deleteRecycle
+      x-bright-register: false
+      x-bright-reason: denyAll destructive
+      responses: { '401': { description: Deliberately forbidden } }
+
+  /api/SecurityQuestions:
+    get:
+      operationId: listSecurityQuestions
+      x-bright-register: true
+      responses: { '200': { description: Finale list response } }
+    post:
+      operationId: createSecurityQuestion
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+  /api/SecurityQuestions/{id}:
+    parameters: [{ $ref: '#/components/parameters/SecurityQuestionId' }]
+    get:
+      operationId: readSecurityQuestion
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+    put:
+      operationId: updateSecurityQuestion
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+    delete:
+      operationId: deleteSecurityQuestion
+      x-bright-register: false
+      x-bright-reason: denyAll destructive
+      responses: { '401': { description: Deliberately forbidden } }
+
+  /api/SecurityAnswers:
+    get:
+      operationId: listSecurityAnswers
+      x-bright-register: false
+      x-bright-reason: denyAll credential-read
+      responses: { '401': { description: Deliberately forbidden } }
+    post:
+      operationId: createSecurityAnswer
+      x-bright-register: false
+      x-bright-reason: credential-write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SecurityAnswerWrite' }
+            example: { UserId: 1, SecurityQuestionId: 1, answer: Baseline }
+      responses: { '201': { description: Finale create response for a user without an answer } }
+  /api/SecurityAnswers/{id}:
+    parameters: [{ $ref: '#/components/parameters/SecurityAnswerId' }]
+    get:
+      operationId: readSecurityAnswer
+      x-bright-register: false
+      x-bright-reason: denyAll credential-read
+      responses: { '401': { description: Deliberately forbidden } }
+    put:
+      operationId: updateSecurityAnswer
+      x-bright-register: false
+      x-bright-reason: denyAll credential-write
+      responses: { '401': { description: Deliberately forbidden } }
+    delete:
+      operationId: deleteSecurityAnswer
+      x-bright-register: false
+      x-bright-reason: denyAll destructive
+      responses: { '401': { description: Deliberately forbidden } }
+
+  /api/Addresss:
+    get:
+      operationId: listAddresses
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { description: Custom list response } }
+    post:
+      operationId: createAddress
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressWrite' }
+            example: { fullName: Bright Baseline, mobileNum: 1234567, zipCode: '12345', streetAddress: Test Street 1, city: Test, state: Test, country: Test }
+      responses: { '201': { description: Finale create response } }
+  /api/Addresss/{id}:
+    parameters: [{ $ref: '#/components/parameters/AddressId' }]
+    get:
+      operationId: readAddress
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { description: Custom read response } }
+    put:
+      operationId: updateAddress
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressPatch' }
+            example: { city: Test }
+      responses: { '200': { description: Finale update response } }
+    delete:
+      operationId: deleteAddress
+      x-bright-register: false
+      x-bright-reason: destructive
+      responses: { '200': { description: Custom delete response } }
+
+  /api/PrivacyRequests:
+    get:
+      operationId: listPrivacyRequests
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+    post:
+      operationId: createPrivacyRequest
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PrivacyRequestWrite' }
+            example: { UserId: 1, deletionRequested: false }
+      responses: { '201': { description: Finale create response } }
+  /api/PrivacyRequests/{id}:
+    parameters: [{ $ref: '#/components/parameters/PrivacyRequestId' }]
+    get:
+      operationId: readPrivacyRequest
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+    put:
+      operationId: updatePrivacyRequest
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+    delete:
+      operationId: deletePrivacyRequest
+      x-bright-register: false
+      x-bright-reason: denyAll destructive
+      responses: { '401': { description: Deliberately forbidden } }
+
+  /api/Cards:
+    get:
+      operationId: listCards
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { description: Custom list response } }
+    post:
+      operationId: createCard
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CardWrite' }
+            example: { fullName: Bright Baseline, cardNum: 1234567812345678, expMonth: 12, expYear: 2099 }
+      responses: { '201': { description: Finale create response } }
+  /api/Cards/{id}:
+    parameters: [{ $ref: '#/components/parameters/CardId' }]
+    get:
+      operationId: readCard
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      x-bright-id-resolver: GET /api/Cards; use data[0].id
+      responses: { '200': { description: Custom read response } }
+    put:
+      operationId: updateCard
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+    delete:
+      operationId: deleteCard
+      x-bright-register: false
+      x-bright-reason: destructive
+      responses: { '200': { description: Custom delete response } }
+
+  /api/Quantitys:
+    get:
+      operationId: listQuantities
+      x-bright-register: true
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { description: Finale list response } }
+    post:
+      operationId: createQuantity
+      x-bright-register: false
+      x-bright-reason: denyAll
+      responses: { '401': { description: Deliberately forbidden } }
+  /api/Quantitys/{id}:
+    parameters: [{ $ref: '#/components/parameters/QuantityId' }]
+    get:
+      operationId: readQuantity
+      x-bright-register: false
+      x-bright-reason: accounting role plus source-IP allowlist
+      responses: { '403': { description: Deliberately blocked from runner IP } }
+    put:
+      operationId: updateQuantity
+      x-bright-register: false
+      x-bright-reason: accounting role plus source-IP allowlist
+      responses: { '403': { description: Deliberately blocked from runner IP } }
+    delete:
+      operationId: deleteQuantity
+      x-bright-register: false
+      x-bright-reason: denyAll destructive
+      responses: { '401': { description: Deliberately forbidden } }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+    cookieAuth: { type: apiKey, in: cookie, name: token }
+  parameters:
+    UserId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+    ProductId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+    FeedbackId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+    BasketItemId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+    ChallengeId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+    ComplaintId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+    RecycleId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+    SecurityQuestionId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+    SecurityAnswerId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+    AddressId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+    PrivacyRequestId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+    CardId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+    QuantityId: { name: id, in: path, required: true, schema: { type: integer }, example: 1 }
+  schemas:
+    UserCreate:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+        passwordRepeat: { type: string }
+    ProductWrite:
+      type: object
+      required: [name, description, price, deluxePrice, image]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        price: { type: number }
+        deluxePrice: { type: number }
+        image: { type: string }
+    ProductPatch:
+      type: object
+      properties: { description: { type: string }, price: { type: number } }
+    FeedbackWrite:
+      type: object
+      required: [comment, rating]
+      properties:
+        comment: { type: string }
+        rating: { type: integer }
+        captchaId: { type: integer }
+        captcha: { type: string }
+    BasketItemWrite:
+      type: object
+      required: [ProductId, BasketId, quantity]
+      properties:
+        ProductId: { type: integer }
+        BasketId: { type: integer }
+        quantity: { type: integer }
+    BasketItemPatch:
+      type: object
+      required: [quantity]
+      properties: { quantity: { type: integer } }
+    ComplaintWrite:
+      type: object
+      required: [message]
+      properties: { message: { type: string }, file: { type: string } }
+    RecycleWrite:
+      type: object
+      required: [quantity, AddressId, isPickup, date]
+      properties:
+        quantity: { type: integer }
+        AddressId: { type: integer }
+        isPickup: { type: boolean }
+        date: { type: string, format: date }
+    SecurityAnswerWrite:
+      type: object
+      required: [UserId, SecurityQuestionId, answer]
+      properties:
+        UserId: { type: integer }
+        SecurityQuestionId: { type: integer }
+        answer: { type: string }
+    AddressWrite:
+      type: object
+      required: [fullName, mobileNum, zipCode, streetAddress, city, country]
+      properties:
+        fullName: { type: string }
+        mobileNum: { type: integer }
+        zipCode: { type: string }
+        streetAddress: { type: string }
+        city: { type: string }
+        state: { type: string }
+        country: { type: string }
+    AddressPatch:
+      type: object
+      properties: { city: { type: string }, state: { type: string } }
+    PrivacyRequestWrite:
+      type: object
+      required: [UserId, deletionRequested]
+      properties:
+        UserId: { type: integer }
+        deletionRequested: { type: boolean }
+    CardWrite:
+      type: object
+      required: [fullName, cardNum, expMonth, expYear]
+      properties:
+        fullName: { type: string }
+        cardNum: { type: integer, format: int64 }
+        expMonth: { type: integer }
+        expYear: { type: integer }

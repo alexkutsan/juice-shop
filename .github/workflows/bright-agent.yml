@@ -38,7 +38,7 @@ on:
       scan_mode:
         description: "Scan mode for this manual run"
         required: true
-        default: "full-auth-stub"
+        default: "full-auth"
         type: choice
         options:
           # functional       → RUN_MODE=function: skip full app startup, wrap
@@ -131,19 +131,69 @@ jobs:
               || github.ref }}
           fetch-depth: 0
 
+      - name: Validate clean STAR baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.event_name }}" = "workflow_dispatch"
+          test "${{ inputs.scan_mode }}" = "full-auth"
+
+          base_sha="$(git rev-parse origin/master)"
+          test "$(git merge-base origin/master HEAD)" = "${base_sha}"
+
+          unexpected="$(git diff --name-only origin/master...HEAD | grep -Ev '^(\.github/workflows/bright-agent\.yml|BRIGHT_STAR\.md|bright-star-route-hints\.openapi\.yml)$' || true)"
+          if [[ -n "${unexpected}" ]]; then
+            echo "::error::Application files differ from origin/master: ${unexpected}"
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          hints = Path("bright-star-route-hints.openapi.yml").read_text()
+          server = Path("server.ts").read_text()
+          paths = hints.split("\npaths:\n", 1)[1].split("\ncomponents:\n", 1)[0]
+          operations = re.findall(r"^    (?:get|post|put|delete):$", paths, re.M)
+          cases = re.findall(r"^  - old:", hints, re.M)
+          block = re.search(r"const autoModels = \[(.*?)\n  \]", server, re.S)
+          models = re.findall(r"name: '([^']+)'", block.group(1)) if block else []
+
+          assert len(models) == 13, models
+          assert len(operations) == 65, len(operations)
+          assert len(cases) == 22, len(cases)
+          for model in models:
+              collection = f"/api/{model}s"
+              assert f"  {collection}:" in paths, collection
+              assert f"  {collection}/{{id}}:" in paths, collection
+
+          print(f"Validated {len(models)} Finale resources, {len(operations)} CRUD routes, and {len(cases)} baseline cases")
+          PY
+
       - name: Download & verify Bright Agent
         working-directory: ${{ runner.temp }}
         run: |
-          # Latest release. To pin a version, replace 'latest/download' with
-          # 'download/<tag>', e.g. .../releases/download/v0.1.1
-          base="https://github.com/NeuraLegion/bright-agent-dist/releases/latest/download"
+          # Pin the reviewed release so this costly baseline is reproducible.
+          base="https://github.com/NeuraLegion/bright-agent-dist/releases/download/v0.1.51"
           curl -fsSL -o "${ASSET}" "${base}/${ASSET}"
           curl -fsSL -o "${ASSET}.sha256" "${base}/${ASSET}.sha256"
           sha256sum -c "${ASSET}.sha256"
           chmod +x "${ASSET}"
 
-      - name: Show all available env variables
-        run: env | sort
+      - name: Bright Agent preflight
+        env:
+          LOCAL_REPO_PATH: ${{ github.workspace }}
+          REPO_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRIGHT_TOKEN: ${{ secrets.BRIGHT_TOKEN }}
+          BRIGHT_HOSTNAME: ${{ vars.BRIGHT_HOSTNAME }}
+          BRIGHT_PROJECT_ID: ${{ vars.BRIGHT_PROJECT }}
+          INFERENCE_URL: ${{ vars.INFERENCE_URL }}
+          INFERENCE_TOKEN: ${{ secrets.INFERENCE_TOKEN }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+          RUN_MODE: full
+          BRIGHT_AUTH_STUB: "off"
+          BRIGHT_PREFLIGHT_ONLY: "1"
+        run: "${{ runner.temp }}/${{ env.ASSET }}"
 
       - name: Run Bright Agent
         env:
@@ -178,17 +228,14 @@ jobs:
           # scan to the PR diff; set SCAN_SCOPE=changed to force diff-only (bails
           # on docs-only PRs) or SCAN_SCOPE=full to force a full scan. On
           # workflow_dispatch the run is a full scan.
-          # SCAN_SCOPE: changed
+          # This config branch is only for the manual full baseline.
+          SCAN_SCOPE: full
           # --- Scan mode ---
-          # Default across ALL triggers: full-auth-stub (RUN_MODE=full,
-          # BRIGHT_AUTH_STUB=on). A manual workflow_dispatch can still override
-          # via the `scan_mode` input:
-          #   functional     → RUN_MODE=function
-          #   full-auth      → RUN_MODE=full,     BRIGHT_AUTH_STUB=off
-          #   full-auth-stub → RUN_MODE=full,     BRIGHT_AUTH_STUB=on
-          # On an issue_comment (`/bright-agent`) trigger the input is empty, so
-          # the defaults below apply → the agent boots the real app and forces
-          # the auth stub.
+          # Manual baseline default: full app with real authentication.
+          # A workflow_dispatch can still choose the functional or stub modes,
+          # but this branch's validation gate permits only full-auth.
+          # This branch is not merged into master, so issue-comment steering
+          # continues to use the workflow already present on master.
           RUN_MODE: >-
             ${{ (inputs.scan_mode == 'functional' && 'function')
               || ((inputs.scan_mode == 'full-auth' || inputs.scan_mode == 'full-auth-stub') && 'full')
@@ -196,7 +243,7 @@ jobs:
           BRIGHT_AUTH_STUB: >-
             ${{ (inputs.scan_mode == 'full-auth-stub' && 'on')
               || (inputs.scan_mode == 'full-auth' && 'off')
-              || 'on' }}
+              || 'off' }}
           # --- Detailed stats & diagnostics ---
           BRIGHT_DEBUG: "1"
           BRIGHT_DUMP_TURNS: "1"

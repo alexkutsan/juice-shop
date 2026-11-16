@@ -19,6 +19,9 @@ services:
     build:
       context: .                              # build from the repo's own Dockerfile
       dockerfile: Dockerfile
+      args:
+        # v7 omits an XML writer needed by this Dockerfile's SBOM step.
+        CYCLONEDX_NPM_VERSION: "6.0.1"
     init: true                                # PID-1 init reaps zombies, forwards signals
     restart: unless-stopped                   # a single crash auto-recovers; the scan continues
     ports:
@@ -26,6 +29,7 @@ services:
     environment:
       NODE_ENV: unsafe                        # keep all challenges active
       NODE_OPTIONS: "--max-old-space-size=1536"  # V8 heap below the container cap: GC/throw instead of OOM-kill
+      NODE_CONFIG: '{"ctf":{"countryMapping":{"scoreBoardChallenge":{"name":"Test","code":"ZZ"}}}}'
     mem_limit: 2g
     memswap_limit: 2g                         # no swap thrash
     cpus: "2.0"
@@ -58,21 +62,48 @@ Readiness: the target is up once `GET /rest/admin/application-version` returns H
 First boot rebuilds and re-seeds the database, which takes ~60–90 s — wait for the 200
 before scanning (this is why `start_period` is 90 s).
 
+The application creates its schema and seed users on every start. It has no installation
+wizard. `/install` is the Angular SPA fallback, not a setup page. During
+`first_run_setup`, verify the existing admin login and report the app as already set up.
+Do not add users, edit seed files, or rebuild the image during that phase.
+
+Every Docker rebuild must pass `CYCLONEDX_NPM_VERSION=6.0.1`. The unpinned current
+v7 release fails this repository's XML SBOM step. Local clean-master builds and the
+resulting health endpoint were verified with v6.0.1.
+
 ## Auth
 
-- Login: `POST /rest/user/login` with JSON body
-  `{"email": "<user>", "password": "<password>"}`. Success returns HTTP 200 with body
-  `{"authentication": {"token": "<JWT>", ...}}`.
-- Extract the JWT from the login response body (match `"token":"([^"]+)"`) and inject it
-  into scan requests as the header `Authorization: Bearer <token>`.
-- Session-check / test request: `GET /rest/basket/1` — returns 401 without a token and
-  200 with a valid Bearer token.
+- Run with `BRIGHT_AUTH_STUB=off`. Use the real JSON login.
+- Login: `POST /rest/user/login` with body
+  `{"email":"admin@juice-sh.op","password":"admin123"}`.
+- Success returns HTTP 200 with `authentication.token`.
+- Inject that JWT into both `Authorization: Bearer <token>` and
+  `Cookie: token=<token>`. Several valid routes use one form only.
+- Session check: `GET /rest/basket/1` returns 401 anonymously and 200 with the
+  seeded admin session.
+- Refresh the login after each application restart.
 
 ## Credentials
 
-- Default admin credentials for this training app: `admin@juice-sh.op` / `admin123`.
-  (Well-known public Juice Shop defaults, safe for this deliberately-vulnerable target.
-  For a real application, reference credentials by secret/variable name, not value.)
+All needed accounts are public fixtures in `data/static/users.yml`. No external
+credentials are needed. Prefer the seeded admin above; it owns BasketId 1, a wallet,
+cards, and a security answer. For the accounting-only delivery-status route, use
+`accountant@juice-sh.op` / `i am an awesome accountant` as a separate role-specific
+probe. Never print or persist a returned JWT.
+
+## Route inventory and baseline examples
+
+Read `bright-star-route-hints.openapi.yml` before building the route inventory or
+sampling parameters. It is a source-backed supplement to the B2B-only `swagger.yml`.
+
+- `server.ts` declares 13 `finale.resource` models.
+- Each model generates exactly collection GET/POST and item GET/PUT/DELETE.
+- The catalog therefore contains exactly 65 generated CRUD operations.
+- It marks 27 operations as safe and locally baseline-verified.
+- It maps all 22 exclusions from run 41988468812 to valid requests or exclusions.
+- Do not invent PATCH operations or add `/api` to direct routes.
+- Resolve MarsDB order and review IDs through the catalog's resolver requests.
+- Keep operations marked `x-bright-register: false` out of registration.
 
 ## Scan configuration (apply at scan launch)
 

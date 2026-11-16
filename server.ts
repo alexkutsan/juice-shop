@@ -44,6 +44,7 @@ import { QuantityModel } from './models/quantity'
 import { FeedbackModel } from './models/feedback'
 import { ComplaintModel } from './models/complaint'
 import { ChallengeModel } from './models/challenge'
+import { BasketModel } from './models/basket'
 import { BasketItemModel } from './models/basketitem'
 import { SecurityAnswerModel } from './models/securityAnswer'
 import { PrivacyRequestModel } from './models/privacyRequests'
@@ -370,12 +371,72 @@ restoreOverwrittenFilesWithOriginals().then(() => {
   /* BasketItems: API only accessible for authenticated users */
   app.use('/api/BasketItems', security.isAuthorized())
   app.use('/api/BasketItems/:id', security.isAuthorized())
+  app.get('/api/BasketItems/:id', async (req: Request, res: Response, next: NextFunction) => {
+    const authenticatedUserId = (req as any).auth?.data?.id
+    const id = req.params.id
+
+    if (!/^\d+$/.test(id)) {
+      res.status(404).json({ status: 'error', message: 'Not found' })
+      return
+    }
+
+    try {
+      const basketItem = await BasketItemModel.findByPk(id, { attributes: ['BasketId'] })
+      const ownedBasket = basketItem === null
+        ? null
+        : await BasketModel.findOne({
+          where: { id: basketItem.BasketId, UserId: authenticatedUserId },
+          attributes: ['id']
+        })
+
+      if (ownedBasket === null) {
+        res.status(404).json({ status: 'error', message: 'Not found' })
+        return
+      }
+      next()
+    } catch (error) {
+      next(error)
+    }
+  })
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
+  app.get('/api/Feedbacks/:id', async (req: Request, res: Response, next: NextFunction) => {
+    const authenticatedUser = (req as any).auth?.data
+    const id = req.params.id
+
+    if (!/^\d+$/.test(id)) {
+      res.status(404).json({ status: 'error', message: 'Not found' })
+      return
+    }
+
+    try {
+      const feedback = await FeedbackModel.findByPk(id, { attributes: ['UserId'] })
+      if (feedback === null || (authenticatedUser?.role !== security.roles.admin && feedback.UserId !== authenticatedUser?.id)) {
+        res.status(404).json({ status: 'error', message: 'Not found' })
+        return
+      }
+      next()
+    } catch (error) {
+      next(error)
+    }
+  })
   /* Users: Only POST is allowed in order to register a new user */
   app.get('/api/Users', security.isAuthorized())
   app.route('/api/Users/:id')
-    .get(security.isAuthorized())
+    .get(
+      security.isAuthorized(),
+      (req: Request, res: Response, next: NextFunction) => {
+        const authenticatedUser = (req as any).auth?.data
+        const requestedUserId = Number(req.params.id)
+
+        if (!/^\d+$/.test(req.params.id) || !Number.isSafeInteger(requestedUserId) || requestedUserId < 1 ||
+          (authenticatedUser?.role !== security.roles.admin && Number(authenticatedUser?.id) !== requestedUserId)) {
+          res.status(404).json({ status: 'error', message: 'Not found' })
+          return
+        }
+        next()
+      }
+    )
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
@@ -408,6 +469,8 @@ restoreOverwrittenFilesWithOriginals().then(() => {
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
+  /* Only associate feedback with the authenticated submitter; anonymous feedback remains unassociated. */
+  app.post('/api/Feedbacks', verify.setFeedbackUserId())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', verifyCaptcha())
   /* Captcha Bypass challenge verification */
@@ -459,7 +522,8 @@ restoreOverwrittenFilesWithOriginals().then(() => {
   app.delete('/api/Addresss/:id', security.appendUserId(), address.delAddressById())
   app.get('/api/Addresss/:id', security.appendUserId(), address.getAddressById())
   app.get('/api/Deliverys', delivery.getDeliveryMethods())
-  app.get('/api/Deliverys/:id', delivery.getDeliveryMethod())
+  /* Delivery method details are only available to authenticated customers. */
+  app.get('/api/Deliverys/:id', security.isAuthorized(), delivery.getDeliveryMethod())
   // vuln-code-snippet end changeProductChallenge
 
   /* Verify the 2FA Token */

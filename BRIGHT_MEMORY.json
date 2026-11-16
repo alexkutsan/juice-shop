@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "generatedAt": "2026-11-16T16:55:58.957Z",
+  "instructionHash": "daa21d634f626c1ed34bacbab65420e847e485596081358165952745b92af5d4",
+  "startup": {
+    "command": "CYCLONEDX_NPM_VERSION=6.0.1 docker compose -f docker-compose.dast.yml up -d --build",
+    "port": 3000,
+    "healthCheckPath": "/rest/admin/application-version",
+    "context": "Built and started the app in Docker with the repo Dockerfile and hardened compose wrapper. After startup, GET /rest/admin/application-version returned HTTP 200 with {\"version\":\"18.0.0\"}, and the container reached healthy status."
+  },
+  "scanPrep": {
+    "context": "Summary: Relaxed the source-defined repeat-request blockers and verified that repeated requests now pass without 429s, while the CAPTCHA-gated entry points now accept requests.; verified: The app is reachable, the changed CAPTCHA checks are no-ops, and the changed rate limits were raised far beyond their former 100-request window, so no changed anti-automation control is evidenced as blocking.\nChange: Raised the repeat-request limits on /rest/user/reset-password and the three /rest/2fa endpoints from 100 to 999999.\nChange: Removed CAPTCHA verification as a blocking step for /api/Feedbacks and /rest/user/data-export so automated requests no longer need a solved CAPTCHA.\nChange: Rebuilt and restarted the juice-shop service with the DAST compose command, then re-probed the affected routes to confirm the fixes persisted.\nRecovery guidance (security controls): If you need to reproduce the scan-prep state later, restart the service with `CYCLONEDX_NPM_VERSION=6.0.1 docker compose -f docker-compose.dast.yml up -d --build juice-shop`, wait for `/rest/admin/application-version` to return 200, then recheck with a burst of 101 requests against `/rest/user/reset-password` and the `/rest/2fa/*` routes; they should stay below 429. Also confirm `/api/Feedbacks` and `/rest/user/data-export` accept requests even when CAPTCHA answers are wrong or omitted.\nRecovery guidance (2FA/MFA): No 2FA/MFA remediation is required for this setup. Re-verify by POSTing `{\"email\":\"testing@juice-sh.op\",\"password\":\"IamUsedForTesting\"}` to `/rest/user/login` and then calling `/rest/user/whoami` with the returned `token` as the `Cookie: token=...` header. If a future build changes this behavior, inspect `routes/login.ts` for the `totpSecret !== ''` check and the seeded user entry in `data/static/users.yml`."
+  }
+}

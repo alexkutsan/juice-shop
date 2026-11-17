@@ -372,6 +372,35 @@ restoreOverwrittenFilesWithOriginals().then(() => {
   app.use('/api/BasketItems/:id', security.isAuthorized())
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
+  app.get('/api/Feedbacks/:id', async (req: Request, res: Response, next: NextFunction) => {
+    const feedbackId = Number(req.params.id)
+    const token = utils.jwtFrom(req)
+    const caller = security.verify(token) ? security.decode(token) : undefined
+    const callerId = Number(caller?.data?.id)
+
+    if (!Number.isSafeInteger(feedbackId) || feedbackId <= 0 || !Number.isSafeInteger(callerId) || callerId <= 0) {
+      res.status(404).json({ status: 'error', message: 'Not Found' })
+      return
+    }
+
+    try {
+      const isAdmin = caller?.data?.role === security.roles.admin
+      const feedback = await FeedbackModel.findOne({
+        where: isAdmin ? { id: feedbackId } : { id: feedbackId, UserId: callerId }
+      })
+      if (feedback == null) {
+        res.status(404).json({ status: 'error', message: 'Not Found' })
+        return
+      }
+      res.status(200).json({ status: 'success', data: feedback })
+    } catch (error) {
+      next(error)
+    }
+  })
+  /* Never allow an item request to fall through to Finale's unscoped generated handler. */
+  app.get('/api/Feedbacks/:id', (_req: Request, res: Response) => {
+    res.status(404).json({ status: 'error', message: 'Not Found' })
+  })
   /* Users: Only POST is allowed in order to register a new user */
   app.get('/api/Users', security.isAuthorized())
   app.route('/api/Users/:id')
@@ -391,7 +420,7 @@ restoreOverwrittenFilesWithOriginals().then(() => {
   app.use('/api/Complaints/:id', security.denyAll())
   /* Recycles: POST and GET allowed when logged in only */
   app.get('/api/Recycles', recycles.blockRecycleItems())
-  app.post('/api/Recycles', security.isAuthorized())
+  app.post('/api/Recycles', security.isAuthorized(), security.appendUserId(), recycles.authorizeRecycleAddress())
   /* Challenge evaluation before finale takes over */
   app.get('/api/Recycles/:id', recycles.getRecycleItem())
   app.put('/api/Recycles/:id', security.denyAll())

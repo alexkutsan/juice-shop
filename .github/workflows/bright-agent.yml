@@ -181,7 +181,7 @@ jobs:
           BRIGHT_PROJECT_ID: ${{ vars.BRIGHT_PROJECT }}
           INFERENCE_URL: ${{ vars.INFERENCE_URL }}
           INFERENCE_TOKEN: ${{ secrets.INFERENCE_TOKEN }}
-          AI_MODEL: "gpt-5.6-luna,gpt-5.6-sol"
+          AI_MODEL: "gpt-5.6-sol"
           RUN_MODE: full
           BRIGHT_AUTH_STUB: "on"
           BRIGHT_PREFLIGHT_ONLY: "1"
@@ -233,8 +233,8 @@ jobs:
           BRIGHT_DEBUG: "1"
           BRIGHT_DUMP_TURNS: "1"
           BRIGHT_DUMP_DIR: ${{ runner.temp }}/bright-dumps
-          # Fixed model chain: start with Luna, then escalate to Sol.
-          AI_MODEL: "gpt-5.6-luna,gpt-5.6-sol"
+          # Fixed model for this Sol-only comparison run.
+          AI_MODEL: "gpt-5.6-sol"
         run: >-
           python3 .github/scripts/strict-bright-agent-supervisor.py
           "${{ runner.temp }}/${{ env.ASSET }}"

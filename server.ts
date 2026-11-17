@@ -376,21 +376,23 @@ restoreOverwrittenFilesWithOriginals().then(() => {
     const feedbackId = Number(req.params.id)
     const token = utils.jwtFrom(req)
     const caller = security.verify(token) ? security.decode(token) : undefined
+    const callerId = Number(caller?.data?.id)
 
-    if (!Number.isSafeInteger(feedbackId) || feedbackId <= 0 || caller?.data?.id == null) {
+    if (!Number.isSafeInteger(feedbackId) || feedbackId <= 0 || !Number.isSafeInteger(callerId) || callerId <= 0) {
       res.status(404).json({ status: 'error', message: 'Not Found' })
       return
     }
 
     try {
-      const feedback = await FeedbackModel.findByPk(feedbackId, { attributes: ['UserId'] })
-      const isOwner = feedback?.UserId != null && feedback.UserId === caller.data.id
-      const isAdmin = caller.data.role === security.roles.admin
-      if (feedback == null || (!isOwner && !isAdmin)) {
+      const isAdmin = caller?.data?.role === security.roles.admin
+      const feedback = await FeedbackModel.findOne({
+        where: isAdmin ? { id: feedbackId } : { id: feedbackId, UserId: callerId }
+      })
+      if (feedback == null) {
         res.status(404).json({ status: 'error', message: 'Not Found' })
         return
       }
-      next()
+      res.status(200).json({ status: 'success', data: feedback })
     } catch (error) {
       next(error)
     }

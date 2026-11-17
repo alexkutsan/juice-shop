@@ -26,11 +26,17 @@ export const emptyUserRegistration = () => (req: Request, res: Response, next: N
 }
 
 export const forgedFeedbackChallenge = () => (req: Request, res: Response, next: NextFunction) => {
+  const user = security.authenticatedUsers.from(req)
+  const userId = user?.data ? user.data.id : undefined
   challengeUtils.solveIf(challenges.forgedFeedbackChallenge, () => {
-    const user = security.authenticatedUsers.from(req)
-    const userId = user?.data ? user.data.id : undefined
     return req.body?.UserId && req.body.UserId != userId // eslint-disable-line eqeqeq
   })
+
+  // Feedback may be submitted anonymously, but ownership must never come from the client.
+  // Associate authenticated submissions with the caller and anonymous submissions with no user.
+  if (req.body != null) {
+    req.body.UserId = userId ?? null
+  }
   next()
 }
 

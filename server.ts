@@ -397,6 +397,10 @@ restoreOverwrittenFilesWithOriginals().then(() => {
       next(error)
     }
   })
+  /* Never allow an item request to fall through to Finale's unscoped generated handler. */
+  app.get('/api/Feedbacks/:id', (_req: Request, res: Response) => {
+    res.status(404).json({ status: 'error', message: 'Not Found' })
+  })
   /* Users: Only POST is allowed in order to register a new user */
   app.get('/api/Users', security.isAuthorized())
   app.route('/api/Users/:id')

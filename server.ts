@@ -372,6 +372,29 @@ restoreOverwrittenFilesWithOriginals().then(() => {
   app.use('/api/BasketItems/:id', security.isAuthorized())
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
+  app.get('/api/Feedbacks/:id', async (req: Request, res: Response, next: NextFunction) => {
+    const feedbackId = Number(req.params.id)
+    const token = utils.jwtFrom(req)
+    const caller = security.verify(token) ? security.decode(token) : undefined
+
+    if (!Number.isSafeInteger(feedbackId) || feedbackId <= 0 || caller?.data?.id == null) {
+      res.status(404).json({ status: 'error', message: 'Not Found' })
+      return
+    }
+
+    try {
+      const feedback = await FeedbackModel.findByPk(feedbackId, { attributes: ['UserId'] })
+      const isOwner = feedback?.UserId != null && feedback.UserId === caller.data.id
+      const isAdmin = caller.data.role === security.roles.admin
+      if (feedback == null || (!isOwner && !isAdmin)) {
+        res.status(404).json({ status: 'error', message: 'Not Found' })
+        return
+      }
+      next()
+    } catch (error) {
+      next(error)
+    }
+  })
   /* Users: Only POST is allowed in order to register a new user */
   app.get('/api/Users', security.isAuthorized())
   app.route('/api/Users/:id')
